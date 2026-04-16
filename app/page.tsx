@@ -17,7 +17,7 @@ export default function Home() {
         </div>
 
         <div>
-          <h1 className="text-3xl font-bold text-zinc-50">Key Rotator</h1>
+          <h1 className="text-3xl font-bold text-zinc-50">Key Router</h1>
           <p className="mt-2 text-zinc-400 text-sm leading-relaxed">
             Proxy OpenAI-compatível que gerencia múltiplas keys do OpenRouter e
             rotaciona automaticamente ao atingir rate limits.

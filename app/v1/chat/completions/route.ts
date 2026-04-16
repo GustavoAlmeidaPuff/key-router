@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getAvailableKey, markAsRateLimited } from "@/lib/keyRotator";
+import { getAvailableKey, markAsRateLimited } from "@/lib/keyRouter";
 import { extractRetryAfter, isRateLimitError } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
 
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       headers: {
         Authorization: `Bearer ${openRouterKey.key}`,
         "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
-        "X-Title": "OpenRouter Key Rotator",
+        "X-Title": "Key Router",
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),

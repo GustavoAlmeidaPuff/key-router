@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import type { User } from "@supabase/supabase-js";
 
 const navItems = [
   {
@@ -41,6 +44,19 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  async function signOut() {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-zinc-800/60 bg-zinc-950">
@@ -51,7 +67,7 @@ export function Sidebar() {
             <path d="M7 1L13 4.5V9.5L7 13L1 9.5V4.5L7 1Z" fill="white" />
           </svg>
         </div>
-        <span className="text-sm font-semibold text-zinc-100">Key Rotator</span>
+        <span className="text-sm font-semibold text-zinc-100">Key Router</span>
       </div>
 
       {/* Nav */}
@@ -81,10 +97,42 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-zinc-800/60 px-5 py-4">
-        <p className="text-[11px] text-zinc-600">OpenRouter Key Rotator</p>
-        <p className="text-[11px] text-zinc-700">Proxy OpenAI-compatível</p>
+      {/* User */}
+      <div className="border-t border-zinc-800/60 p-3">
+        {user ? (
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+            {/* Avatar */}
+            {user.user_metadata?.avatar_url ? (
+              <img
+                src={user.user_metadata.avatar_url as string}
+                alt="avatar"
+                className="h-7 w-7 rounded-full"
+              />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600/30 text-xs font-medium text-indigo-300">
+                {(user.email ?? "?")[0].toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-zinc-300 truncate">
+                {user.user_metadata?.name ?? user.email}
+              </p>
+            </div>
+            <button
+              onClick={() => void signOut()}
+              title="Sair"
+              className="text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M6 2H3C2.45 2 2 2.45 2 3V12C2 12.55 2.45 13 3 13H6M10 10.5L13 7.5L10 4.5M13 7.5H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="px-2 py-2">
+            <p className="text-[11px] text-zinc-700">Carregando...</p>
+          </div>
+        )}
       </div>
     </aside>
   );

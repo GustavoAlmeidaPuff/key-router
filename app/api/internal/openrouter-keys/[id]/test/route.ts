@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       Authorization: `Bearer ${keyRow.key}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
-      "X-Title": "OpenRouter Key Rotator",
+      "X-Title": "Key Router",
     },
     body: JSON.stringify({
       model,
@@ -53,7 +53,7 @@ async function getFirstFreeModel(openRouterKey: string): Promise<string> {
     headers: {
       Authorization: `Bearer ${openRouterKey}`,
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
-      "X-Title": "OpenRouter Key Rotator",
+      "X-Title": "Key Router",
     },
   });
 

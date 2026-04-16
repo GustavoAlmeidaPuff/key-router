@@ -1,4 +1,4 @@
-# OpenRouter Key Rotator
+# OpenRouter Key Router
 
 Proxy OpenAI-compatível com múltiplas keys do OpenRouter, rotação automática em rate limit e dashboard de gerenciamento.
 

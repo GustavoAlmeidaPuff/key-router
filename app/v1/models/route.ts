@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     headers: {
       Authorization: `Bearer ${key}`,
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
-      "X-Title": "OpenRouter Key Rotator",
+      "X-Title": "Key Router",
     },
   });
 

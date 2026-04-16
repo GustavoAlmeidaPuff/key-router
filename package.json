@@ -1,5 +1,5 @@
 {
-  "name": "openrouter-key-rotator",
+  "name": "key-router",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.3",
     "dotenv": "^17.4.2",
     "nanoid": "^5.1.9",

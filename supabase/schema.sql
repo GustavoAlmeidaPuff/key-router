@@ -1,4 +1,4 @@
--- OpenRouter Key Rotator — Supabase Schema
+-- OpenRouter Key Router — Supabase Schema
 -- Execute este SQL no Supabase Dashboard: https://supabase.com/dashboard
 -- Project → SQL Editor → New query
 

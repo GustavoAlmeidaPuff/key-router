@@ -1,4 +1,4 @@
-# OpenRouter Key Rotator — Plano de Construção
+# OpenRouter Key Router — Plano de Construção
 
 ## Visão Geral
 
@@ -138,7 +138,7 @@ Headers a enviar pro OpenRouter:
 ```
 Authorization: Bearer <openrouter-key>
 HTTP-Referer: https://github.com/seu-projeto  (exigido pelo OpenRouter)
-X-Title: OpenRouter Key Rotator
+X-Title: OpenRouter Key Router
 Content-Type: application/json
 ```
 

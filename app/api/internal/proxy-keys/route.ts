@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = (await request.json()) as { name?: string };
-  const normalizedName = body.name?.trim() || `Proxy Key ${new Date().toLocaleString("pt-BR")}`;
+  const normalizedName = body.name?.trim() || `Open Key ${new Date().toLocaleString("pt-BR")}`;
 
   const rawKey = generateProxyKey();
 

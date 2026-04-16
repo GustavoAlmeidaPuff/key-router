@@ -34,9 +34,7 @@ export default function ProxyKeysPage() {
     setLoading(false);
   }
 
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   async function create() {
     setCreating(true);
@@ -60,14 +58,10 @@ export default function ProxyKeysPage() {
   }
 
   async function revoke(id: string, keyName: string) {
-    if (!confirm(`Revogar a key "${keyName}"? Não poderá ser desfeito.`)) return;
+    if (!confirm(`Revogar "${keyName}"? Essa ação não pode ser desfeita.`)) return;
     const r = await fetch(`/api/internal/proxy-keys/${id}`, { method: "DELETE" });
-    if (r.ok) {
-      toast("Key revogada", "success");
-      await load();
-    } else {
-      toast("Erro ao revogar key", "error");
-    }
+    if (r.ok) { toast("Key revogada", "success"); await load(); }
+    else toast("Erro ao revogar key", "error");
   }
 
   return (
@@ -77,43 +71,32 @@ export default function ProxyKeysPage() {
         <div>
           <h1 className="text-xl font-semibold text-zinc-100">Open Keys</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Open Keys que você distribui para seus produtos
+            Gere keys para usar no seu cliente de IA
           </p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
           className="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
         >
-          + Nova Proxy Key
+          + Nova Open Key
         </button>
       </div>
 
-      {/* Connection instructions */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-4">
+      {/* Connection info */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Como usar
+            Configuração
           </span>
           <span className="h-px flex-1 bg-zinc-800" />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <CodeLine label="Base URL" value={`${BASE_URL}/v1`} />
-          <CodeLine label="API Key" value="sk-proxy-xxxx" />
+          <CodeLine label="API Key" value="sua open key" />
         </div>
         <p className="text-xs text-zinc-600">
-          Substitua a URL base da OpenAI por esta. Qualquer produto que aceite a API da OpenAI
-          funciona com o proxy — o campo modelo passa direto para o OpenRouter.
+          Use estas credenciais no seu cliente de IA no lugar da chave original.
         </p>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-600 mb-2">
-            Exemplo — Claudio / Claude Code
-          </p>
-          <code className="text-xs text-zinc-400 leading-relaxed block">
-            OPENAI_BASE_URL=<span className="text-indigo-400">{BASE_URL}/v1</span>
-            <br />
-            OPENAI_API_KEY=<span className="text-indigo-400">sk-proxy-xxxx</span>
-          </code>
-        </div>
       </div>
 
       {/* Table */}
@@ -122,7 +105,7 @@ export default function ProxyKeysPage() {
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/60">
               <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Nome</th>
-              <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Key (mascarada)</th>
+              <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Key</th>
               <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Criada em</th>
               <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Último uso</th>
               <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">Ações</th>
@@ -137,10 +120,13 @@ export default function ProxyKeysPage() {
               </tr>
             ) : keys.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-600">
-                  Nenhuma open key ainda.{" "}
-                  <button onClick={() => setCreateOpen(true)} className="text-indigo-400 hover:underline">
-                    Criar primeira
+                <td colSpan={5} className="px-4 py-10 text-center">
+                  <p className="text-sm text-zinc-500">Nenhuma Open Key criada ainda.</p>
+                  <button
+                    onClick={() => setCreateOpen(true)}
+                    className="mt-3 rounded-lg bg-indigo-600/20 border border-indigo-500/30 px-4 py-1.5 text-xs text-indigo-400 hover:bg-indigo-600/30 transition-colors"
+                  >
+                    + Criar primeira
                   </button>
                 </td>
               </tr>
@@ -174,14 +160,14 @@ export default function ProxyKeysPage() {
         </table>
       </div>
 
-      {/* ── Modal: Criar key ───────────────────────────────────── */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Nova Proxy Key">
+      {/* ── Modal: Criar key ─────────────────────────────────── */}
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Nova Open Key">
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="block text-xs font-medium text-zinc-400">Nome</label>
             <input
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-              placeholder="Ex: Claudio pessoal"
+              placeholder="Nome para identificar esta key"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void create()}
@@ -205,8 +191,8 @@ export default function ProxyKeysPage() {
         </div>
       </Modal>
 
-      {/* ── Modal: Revelar key criada ──────────────────────────── */}
-      <Modal open={!!newKey} onClose={() => setNewKey(null)} title="Proxy Key criada!">
+      {/* ── Modal: Revelar key criada ─────────────────────────── */}
+      <Modal open={!!newKey} onClose={() => setNewKey(null)} title="Open Key criada!">
         <div className="space-y-4">
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
             <p className="text-xs font-medium text-amber-400">

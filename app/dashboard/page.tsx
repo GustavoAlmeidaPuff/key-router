@@ -10,6 +10,12 @@ interface OpenRouterKeyRow {
   request_count: number;
 }
 
+interface OpenKeyRow {
+  id: string;
+  name: string;
+  key: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -17,6 +23,7 @@ interface Message {
 
 export default function DashboardPage() {
   const [keys, setKeys] = useState<OpenRouterKeyRow[]>([]);
+  const [openKeys, setOpenKeys] = useState<OpenKeyRow[]>([]);
   const [proxyKey, setProxyKey] = useState("");
   const [model, setModel] = useState("meta-llama/llama-3.1-8b-instruct:free");
   const [input, setInput] = useState("");
@@ -28,6 +35,12 @@ export default function DashboardPage() {
     void fetch("/api/internal/openrouter-keys")
       .then((r) => r.json())
       .then(setKeys);
+    void fetch("/api/internal/proxy-keys")
+      .then((r) => r.json())
+      .then((data: OpenKeyRow[]) => {
+        setOpenKeys(data);
+        if (data.length > 0) setProxyKey(data[0].key);
+      });
   }, []);
 
   useEffect(() => {
@@ -169,12 +182,19 @@ export default function DashboardPage() {
 
         {/* Config bar */}
         <div className="flex gap-3 border-b border-zinc-800/60 bg-zinc-950/40 px-5 py-3">
-          <input
-            className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-            placeholder="sk-proxy-xxx (Open Key)"
+          <select
+            className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
             value={proxyKey}
             onChange={(e) => setProxyKey(e.target.value)}
-          />
+          >
+            {openKeys.length === 0 ? (
+              <option value="">Nenhuma Open Key criada</option>
+            ) : (
+              openKeys.map((k) => (
+                <option key={k.id} value={k.key}>{k.name}</option>
+              ))
+            )}
+          </select>
           <input
             className="w-72 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
             placeholder="modelo (ex: meta-llama/llama-3.1-8b-instruct:free)"

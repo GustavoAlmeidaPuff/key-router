@@ -237,16 +237,14 @@ export default function OpenRouterKeysPage() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Registrar OpenRouter Key">
         <div className="space-y-4">
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-xs text-zinc-500 leading-relaxed">
-            Crie uma conta em{" "}
-            <span className="text-zinc-300">openrouter.ai</span>, gere uma API key gratuita em{" "}
-            <span className="text-zinc-300">openrouter.ai/settings/keys</span> e cole aqui.
+            Cole a API key da conta que deseja adicionar à rotação.
           </div>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-zinc-400">Nome (ex: Conta 1, Alt email)</label>
+              <label className="block text-xs font-medium text-zinc-400">Nome</label>
               <input
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-                placeholder="Conta pessoal"
+                placeholder="Nome para identificar esta key"
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
               />
@@ -255,7 +253,7 @@ export default function OpenRouterKeysPage() {
               <label className="block text-xs font-medium text-zinc-400">API Key do OpenRouter</label>
               <input
                 className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 font-mono focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-                placeholder="sk-or-v1-..."
+                placeholder="Cole sua API key aqui"
                 value={addKey}
                 onChange={(e) => setAddKey(e.target.value)}
               />

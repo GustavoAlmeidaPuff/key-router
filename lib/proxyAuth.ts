@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { supabase } from "@/lib/supabase";
 
 export function generateProxyKey(): string {
-  return `sk-proxy-${nanoid(32)}`;
+  return `sk-open-${nanoid(32)}`;
 }
 
 export async function validateProxyKey(key: string): Promise<boolean> {

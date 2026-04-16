@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
+import type { ActivityEvent } from "@/lib/activityStream";
 
 interface OpenRouterKeyRow {
   id: string;
@@ -34,14 +35,17 @@ export default function OpenRouterKeysPage() {
   const [addLoading, setAddLoading] = useState(false);
 
   const [testResults, setTestResults] = useState<Record<string, TestResult | "loading">>({});
-  async function loadKeys() {
+  const [activeKeyId, setActiveKeyId] = useState<string | null>(null);
+  const [activityLog, setActivityLog] = useState<ActivityEvent[]>([]);
+  const [sseConnected, setSseConnected] = useState(false);
+  async function loadKeys(): Promise<OpenRouterKeyRow[]> {
     const r = await fetch("/api/internal/openrouter-keys");
-    if (!r.ok) return;
-    setKeys(await r.json());
+    if (!r.ok) return [];
+    const data = (await r.json()) as OpenRouterKeyRow[];
+    setKeys(data);
     setLoading(false);
+    return data;
   }
-
-  useEffect(() => { void loadKeys(); }, []);
 
   async function addManual() {
     if (!addName || !addKey) return;
@@ -90,6 +94,27 @@ export default function OpenRouterKeysPage() {
     setTestResults((prev) => ({ ...prev, [id]: result }));
     await loadKeys();
   }
+
+  useEffect(() => { void loadKeys(); }, []);
+
+  // SSE — atividade em tempo real
+  useEffect(() => {
+    const es = new EventSource("/api/internal/activity-stream");
+    es.onopen = () => setSseConnected(true);
+    es.onerror = () => setSseConnected(false);
+    es.onmessage = (e) => {
+      const event = JSON.parse(e.data as string) as ActivityEvent;
+      setActivityLog((prev) => [event, ...prev].slice(0, 30));
+      if (event.type === "using") {
+        setActiveKeyId(event.keyId);
+      } else if (event.type === "success" || event.type === "rate_limit_hit") {
+        setActiveKeyId(null);
+        // Recarrega para atualizar request_count e rate_limited_until
+        void loadKeys();
+      }
+    };
+    return () => { es.close(); setSseConnected(false); };
+  }, []);
 
   function getStatus(row: OpenRouterKeyRow) {
     const now = new Date();
@@ -178,8 +203,9 @@ export default function OpenRouterKeysPage() {
               keys.map((row) => {
                 const status = getStatus(row);
                 const testResult = testResults[row.id];
+                const isActive = activeKeyId === row.id;
                 return (
-                  <tr key={row.id} className="hover:bg-zinc-900/30 transition-colors">
+                  <tr key={row.id} className={`transition-colors ${isActive ? "bg-indigo-950/40 border-l-2 border-l-indigo-500" : "hover:bg-zinc-900/30"}`}>
                     <td className="px-4 py-3 font-medium text-zinc-200">{row.name}</td>
                     <td className="px-4 py-3">
                       <code className="text-xs text-zinc-500 font-mono">····{row.suffix}</code>
@@ -244,6 +270,24 @@ export default function OpenRouterKeysPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Atividade em tempo real */}
+      <div className="rounded-xl border border-zinc-800 overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
+          <span className={`h-2 w-2 rounded-full ${sseConnected ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+          <span className="text-xs font-medium text-zinc-400">Atividade em tempo real</span>
+          {!sseConnected && <span className="text-[10px] text-zinc-600">desconectado</span>}
+        </div>
+        <div className="divide-y divide-zinc-800/40 max-h-48 overflow-y-auto">
+          {activityLog.length === 0 ? (
+            <p className="px-4 py-4 text-xs text-zinc-600">Aguardando requests...</p>
+          ) : (
+            activityLog.map((event, i) => (
+              <ActivityRow key={i} event={event} />
+            ))
+          )}
+        </div>
       </div>
 
       {/* Tip */}
@@ -322,5 +366,54 @@ function StatusBadge({ status, rateLimitedUntil: _rateLimitedUntil }: { status: 
       <span className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
       Pausada
     </span>
+  );
+}
+
+function ActivityRow({ event }: { event: ActivityEvent }) {
+  const time = new Date(event.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  let icon: string;
+  let text: string;
+  let color: string;
+
+  switch (event.type) {
+    case "using":
+      icon = "→";
+      text = `Usando ${event.keyName}`;
+      color = "text-indigo-400";
+      break;
+    case "success":
+      icon = "✓";
+      text = `${event.keyName} respondeu em ${event.latencyMs}ms`;
+      color = "text-emerald-400";
+      break;
+    case "rate_limit_hit":
+      icon = "⚠";
+      text = `${event.keyName} atingiu rate limit — tentando outra`;
+      color = "text-amber-400";
+      break;
+    case "retrying":
+      icon = "↺";
+      text = `Tentativa ${event.attempt + 1}...`;
+      color = "text-zinc-400";
+      break;
+    case "no_keys":
+      icon = "✗";
+      text = "Nenhuma key disponível";
+      color = "text-red-400";
+      break;
+    case "all_limited":
+      icon = "✗";
+      text = "Todas as keys em rate limit";
+      color = "text-red-400";
+      break;
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2 text-xs">
+      <span className="shrink-0 text-zinc-600 tabular-nums">{time}</span>
+      <span className={`shrink-0 w-4 text-center font-mono ${color}`}>{icon}</span>
+      <span className={color}>{text}</span>
+    </div>
   );
 }

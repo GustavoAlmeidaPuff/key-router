@@ -66,6 +66,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
+  // Limpa qualquer rate limit anterior
+  await supabase
+    .from("openrouter_keys")
+    .update({ rate_limited_until: null })
+    .eq("id", id);
+
   return NextResponse.json({ success: true, latencyMs, model });
 }
 

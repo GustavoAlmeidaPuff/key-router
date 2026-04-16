@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { getAvailableKey, markAsRateLimited } from "@/lib/keyRouter";
 import { extractRetryAfter, isRateLimitError } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
+import { emitActivity } from "@/lib/activityStream";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -23,14 +24,20 @@ export async function POST(request: NextRequest) {
   let lastResponse: Response | null = null;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) emitActivity({ type: "retrying", attempt });
+
     const openRouterKey = await getAvailableKey();
     if (!openRouterKey) {
+      emitActivity({ type: "no_keys" });
       return NextResponse.json(
         { error: "Nenhuma OpenRouter key disponível" },
         { status: 503 },
       );
     }
 
+    emitActivity({ type: "using", keyId: openRouterKey.id, keyName: openRouterKey.name });
+
+    const startedAt = Date.now();
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
@@ -51,6 +58,8 @@ export async function POST(request: NextRequest) {
       .eq("id", openRouterKey.id);
 
     if (response.ok) {
+      emitActivity({ type: "success", keyId: openRouterKey.id, keyName: openRouterKey.name, latencyMs: Date.now() - startedAt });
+
       if (isStreaming) {
         return new NextResponse(response.body, {
           status: 200,
@@ -71,6 +80,7 @@ export async function POST(request: NextRequest) {
 
     const text = await response.text();
     if (isRateLimitError(response, text)) {
+      emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name });
       await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
       lastResponse = response;
       continue;
@@ -82,6 +92,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  emitActivity({ type: "all_limited" });
   return NextResponse.json(
     { error: "Todas as keys estão em rate limit", status: lastResponse?.status ?? 429 },
     { status: 429 },

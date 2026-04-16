@@ -1,18 +1,23 @@
 import { nanoid } from "nanoid";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 export function generateProxyKey(): string {
   return `sk-proxy-${nanoid(32)}`;
 }
 
 export async function validateProxyKey(key: string): Promise<boolean> {
-  const found = await prisma.proxyKey.findUnique({ where: { key } });
-  if (!found) return false;
+  const { data } = await supabase
+    .from("proxy_keys")
+    .select("id")
+    .eq("key", key)
+    .single();
 
-  await prisma.proxyKey.update({
-    where: { id: found.id },
-    data: { lastUsedAt: new Date() },
-  });
+  if (!data) return false;
+
+  await supabase
+    .from("proxy_keys")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", data.id);
 
   return true;
 }

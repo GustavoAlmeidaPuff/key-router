@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 export interface CreateKeyOptions {
   name: string;
@@ -36,13 +36,9 @@ export async function createOpenRouterKey(
   const key = payload.data?.key ?? payload.key;
   const id = payload.data?.id ?? payload.id ?? crypto.randomUUID();
 
-  if (!key) {
-    throw new Error("OpenRouter não retornou a key criada.");
-  }
+  if (!key) throw new Error("OpenRouter não retornou a key criada.");
 
-  await prisma.openRouterKey.create({
-    data: { name: options.name, key },
-  });
+  await supabase.from("openrouter_keys").insert({ name: options.name, key });
 
   return { key, id };
 }

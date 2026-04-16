@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { getAvailableKey, markAsRateLimited } from "@/lib/keyRotator";
 import { extractRetryAfter, isRateLimitError } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
@@ -35,21 +35,20 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openRouterKey.key}`,
-        "HTTP-Referer":
-          process.env.OPENROUTER_HTTP_REFERER ?? "https://github.com/seu-projeto",
+        "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
         "X-Title": "OpenRouter Key Rotator",
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
     });
 
-    await prisma.openRouterKey.update({
-      where: { id: openRouterKey.id },
-      data: {
-        lastUsedAt: new Date(),
-        requestCount: { increment: 1 },
-      },
-    });
+    await supabase
+      .from("openrouter_keys")
+      .update({
+        last_used_at: new Date().toISOString(),
+        request_count: openRouterKey.request_count + 1,
+      })
+      .eq("id", openRouterKey.id);
 
     if (response.ok) {
       if (isStreaming) {

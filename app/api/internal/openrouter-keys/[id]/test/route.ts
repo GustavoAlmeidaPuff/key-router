@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
 
 interface RouteContext {
@@ -11,15 +11,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (unauthorized) return unauthorized;
 
   const { id } = await context.params;
-  const key = await prisma.openRouterKey.findUnique({ where: { id } });
-  if (!key) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
+
+  const { data: keyRow } = await supabase
+    .from("openrouter_keys")
+    .select("key")
+    .eq("id", id)
+    .single();
+
+  if (!keyRow) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
 
   const startedAt = Date.now();
-  const model = await getFirstFreeModel(key.key);
+  const model = await getFirstFreeModel(keyRow.key);
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key.key}`,
+      Authorization: `Bearer ${keyRow.key}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
       "X-Title": "OpenRouter Key Rotator",
@@ -33,12 +40,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const latencyMs = Date.now() - startedAt;
   if (!response.ok) {
     return NextResponse.json(
-      { success: false, error: await response.text(), latencyMs },
+      { success: false, error: await response.text(), latencyMs, model },
       { status: 400 },
     );
   }
 
-  return NextResponse.json({ success: true, latencyMs });
+  return NextResponse.json({ success: true, latencyMs, model });
 }
 
 async function getFirstFreeModel(openRouterKey: string): Promise<string> {
@@ -50,11 +57,9 @@ async function getFirstFreeModel(openRouterKey: string): Promise<string> {
     },
   });
 
-  if (!response.ok) {
-    return "google/gemma-2-9b-it:free";
-  }
+  if (!response.ok) return "google/gemma-2-9b-it:free";
 
   const payload = (await response.json()) as { data?: Array<{ id?: string }> };
-  const firstFree = payload.data?.find((item) => item.id?.includes(":free"))?.id;
+  const firstFree = payload.data?.find((m) => m.id?.includes(":free"))?.id;
   return firstFree ?? "google/gemma-2-9b-it:free";
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
 import { maskKey } from "@/lib/masks";
 
@@ -7,9 +7,15 @@ export async function GET(request: NextRequest) {
   const unauthorized = checkDashboardAccess(request);
   if (unauthorized) return unauthorized;
 
-  const keys = await prisma.openRouterKey.findMany({ orderBy: { createdAt: "desc" } });
+  const { data: keys, error } = await supabase
+    .from("openrouter_keys")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
   return NextResponse.json(
-    keys.map((key) => ({
+    (keys ?? []).map((key) => ({
       ...key,
       key: maskKey(key.key),
       suffix: key.key.slice(-4),
@@ -26,9 +32,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name e key são obrigatórios" }, { status: 400 });
   }
 
-  const created = await prisma.openRouterKey.create({
-    data: { name: body.name, key: body.key },
-  });
+  const { data: created, error } = await supabase
+    .from("openrouter_keys")
+    .insert({ name: body.name, key: body.key })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json({ error: "Essa key já está cadastrada" }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     ...created,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
 
 interface RouteContext {
@@ -9,7 +9,10 @@ interface RouteContext {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const unauthorized = checkDashboardAccess(request);
   if (unauthorized) return unauthorized;
+
   const { id } = await context.params;
-  await prisma.proxyKey.delete({ where: { id } });
+  const { error } = await supabase.from("proxy_keys").delete().eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

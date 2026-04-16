@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ProxyKey {
+  id         String   @id @default(cuid())
+  name       String
+  key        String   @unique
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+}
+
+model OpenRouterKey {
+  id               String    @id @default(cuid())
+  name             String
+  key              String    @unique
+  rateLimitedUntil DateTime?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime?
+  requestCount     Int       @default(0)
+  isActive         Boolean   @default(true)
+}

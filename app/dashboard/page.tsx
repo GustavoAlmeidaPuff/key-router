@@ -12,7 +12,7 @@ interface OpenRouterKeyRow {
 
 export default function DashboardPage() {
   const [keys, setKeys] = useState<OpenRouterKeyRow[]>([]);
-  const [model, setModel] = useState("meta-llama/llama-3.1-8b-instruct:free");
+  const [model, setModel] = useState("");
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -92,7 +92,7 @@ export default function DashboardPage() {
         <button
           className="rounded bg-blue-600 px-4 py-2 disabled:opacity-60"
           onClick={runTestChat}
-          disabled={loading || !message}
+          disabled={loading || !message || !model}
         >
           {loading ? "Enviando..." : "Enviar"}
         </button>

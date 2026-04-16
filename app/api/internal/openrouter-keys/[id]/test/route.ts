@@ -15,6 +15,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!key) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
 
   const startedAt = Date.now();
+  const model = await getFirstFreeModel(key.key);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       "X-Title": "OpenRouter Key Rotator",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3.1-8b-instruct:free",
+      model,
       messages: [{ role: "user", content: "Say 'OK' and nothing else." }],
     }),
   });
@@ -38,4 +39,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json({ success: true, latencyMs });
+}
+
+async function getFirstFreeModel(openRouterKey: string): Promise<string> {
+  const response = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: {
+      Authorization: `Bearer ${openRouterKey}`,
+      "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
+      "X-Title": "OpenRouter Key Rotator",
+    },
+  });
+
+  if (!response.ok) {
+    return "google/gemma-2-9b-it:free";
+  }
+
+  const payload = (await response.json()) as { data?: Array<{ id?: string }> };
+  const firstFree = payload.data?.find((item) => item.id?.includes(":free"))?.id;
+  return firstFree ?? "google/gemma-2-9b-it:free";
 }

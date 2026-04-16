@@ -20,7 +20,7 @@ OPENAI_API_KEY=sk-proxy-xxxx
 
 - Configure `OPENAI_BASE_URL=http://localhost:3000/v1`
 - Configure `OPENAI_API_KEY=sk-proxy-xxxx`
-- Escolha um modelo do OpenRouter em `model` (ex: `meta-llama/llama-3.1-8b-instruct:free`)
+- Escolha um modelo do OpenRouter em `model` (ex: qualquer `:free` disponível em `/v1/models?free=true`)
 
 ## Rotas principais
 

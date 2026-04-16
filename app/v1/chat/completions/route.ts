@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const text = await response.text();
     if (isRateLimitError(response, text)) {
-      await markAsRateLimited(openRouterKey.id, extractRetryAfter(response) ?? undefined);
+      await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
       lastResponse = response;
       continue;
     }

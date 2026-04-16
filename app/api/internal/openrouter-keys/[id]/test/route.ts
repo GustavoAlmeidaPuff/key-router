@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Se for rate limit, marca no banco e retorna status atualizado
     if (isRateLimitError(response, errorText)) {
-      const retryAfter = extractRetryAfter(response);
+      const retryAfter = extractRetryAfter(response, errorText);
       await markAsRateLimited(id, retryAfter ?? undefined);
 
       const until = new Date(Date.now() + (retryAfter ?? 60) * 1000).toISOString();

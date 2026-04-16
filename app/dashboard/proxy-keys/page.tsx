@@ -15,15 +15,22 @@ export default function ProxyKeysPage() {
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetch("/api/internal/proxy-keys")
+      .then((response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((data) => {
+        if (data) setKeys(data);
+      });
+  }, []);
+
   async function load() {
     const response = await fetch("/api/internal/proxy-keys");
     if (!response.ok) return;
     setKeys(await response.json());
   }
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   async function create() {
     const response = await fetch("/api/internal/proxy-keys", {

@@ -1,27 +1,56 @@
+import { supabase } from "@/lib/supabase";
+
 export type ActivityEvent =
-  | { type: "using"; keyId: string; keyName: string; ts: number }
-  | { type: "success"; keyId: string; keyName: string; latencyMs: number; ts: number }
-  | { type: "rate_limit_hit"; keyId: string; keyName: string; ts: number }
-  | { type: "retrying"; attempt: number; ts: number }
-  | { type: "no_keys"; ts: number }
-  | { type: "all_limited"; ts: number };
+  | { type: "using"; keyId: string; keyName: string; clientName: string; ts: number }
+  | { type: "success"; keyId: string; keyName: string; clientName: string; latencyMs: number; ts: number }
+  | { type: "rate_limit_hit"; keyId: string; keyName: string; clientName: string; ts: number }
+  | { type: "retrying"; attempt: number; clientName: string; ts: number }
+  | { type: "no_keys"; clientName: string; ts: number }
+  | { type: "all_limited"; clientName: string; ts: number };
 
-type Subscriber = (event: ActivityEvent) => void;
-
-// Persiste no globalThis para sobreviver a hot-reloads do Next.js dev
-const g = globalThis as typeof globalThis & {
-  __activitySubscribers?: Set<Subscriber>;
+export type ActivityEventRow = {
+  id: number;
+  type: string;
+  key_id: string | null;
+  key_name: string | null;
+  client_name: string | null;
+  latency_ms: number | null;
+  attempt: number | null;
+  created_at: string;
 };
-if (!g.__activitySubscribers) g.__activitySubscribers = new Set();
 
-export function emitActivity(event: Omit<ActivityEvent, "ts">): void {
-  const full = { ...event, ts: Date.now() } as ActivityEvent;
-  g.__activitySubscribers!.forEach((cb) => {
-    try { cb(full); } catch { /* subscriber desconectado */ }
-  });
+export function rowToEvent(row: ActivityEventRow): ActivityEvent {
+  const ts = new Date(row.created_at).getTime();
+  switch (row.type) {
+    case "using":
+      return { type: "using", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, ts };
+    case "success":
+      return { type: "success", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, latencyMs: row.latency_ms!, ts };
+    case "rate_limit_hit":
+      return { type: "rate_limit_hit", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, ts };
+    case "retrying":
+      return { type: "retrying", attempt: row.attempt!, clientName: row.client_name!, ts };
+    case "no_keys":
+      return { type: "no_keys", clientName: row.client_name!, ts };
+    default:
+      return { type: "all_limited", clientName: row.client_name!, ts };
+  }
 }
 
-export function subscribeToActivity(cb: Subscriber): () => void {
-  g.__activitySubscribers!.add(cb);
-  return () => g.__activitySubscribers!.delete(cb);
+// Fire-and-forget: não bloqueia o proxy route
+export function emitActivity(event: Omit<ActivityEvent, "ts">): void {
+  void supabase.from("activity_events").insert({
+    type: event.type,
+    key_id: "keyId" in event ? event.keyId : null,
+    key_name: "keyName" in event ? event.keyName : null,
+    client_name: "clientName" in event ? event.clientName : null,
+    latency_ms: "latencyMs" in event ? (event as { latencyMs: number }).latencyMs : null,
+    attempt: "attempt" in event ? (event as { attempt: number }).attempt : null,
+  });
+
+  // Limpa eventos com mais de 1h para não acumular
+  void supabase
+    .from("activity_events")
+    .delete()
+    .lt("created_at", new Date(Date.now() - 3_600_000).toISOString());
 }

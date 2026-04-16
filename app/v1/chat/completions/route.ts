@@ -9,9 +9,11 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export async function POST(request: NextRequest) {
   const token = parseBearerToken(request.headers.get("authorization"));
-  if (!token || !(await validateProxyKey(token))) {
+  const proxyKey = token ? await validateProxyKey(token) : null;
+  if (!proxyKey) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const clientName = proxyKey.name;
 
   let body: unknown;
   try {
@@ -24,18 +26,18 @@ export async function POST(request: NextRequest) {
   let lastResponse: Response | null = null;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (attempt > 0) emitActivity({ type: "retrying", attempt });
+    if (attempt > 0) emitActivity({ type: "retrying", attempt, clientName });
 
     const openRouterKey = await getAvailableKey();
     if (!openRouterKey) {
-      emitActivity({ type: "no_keys" });
+      emitActivity({ type: "no_keys", clientName });
       return NextResponse.json(
         { error: "Nenhuma OpenRouter key disponível" },
         { status: 503 },
       );
     }
 
-    emitActivity({ type: "using", keyId: openRouterKey.id, keyName: openRouterKey.name });
+    emitActivity({ type: "using", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName });
 
     const startedAt = Date.now();
     const response = await fetch(OPENROUTER_URL, {
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
       .eq("id", openRouterKey.id);
 
     if (response.ok) {
-      emitActivity({ type: "success", keyId: openRouterKey.id, keyName: openRouterKey.name, latencyMs: Date.now() - startedAt });
+      emitActivity({ type: "success", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName, latencyMs: Date.now() - startedAt });
 
       if (isStreaming) {
         return new NextResponse(response.body, {
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     const text = await response.text();
     if (isRateLimitError(response, text)) {
-      emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name });
+      emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName });
       await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
       lastResponse = response;
       continue;
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  emitActivity({ type: "all_limited" });
+  emitActivity({ type: "all_limited", clientName });
   return NextResponse.json(
     { error: "Todas as keys estão em rate limit", status: lastResponse?.status ?? 429 },
     { status: 429 },

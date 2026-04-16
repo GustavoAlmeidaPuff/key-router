@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
-import type { ActivityEvent } from "@/lib/activityStream";
+import type { ActivityEvent, ActivityEventRow } from "@/lib/activityStream";
+import { rowToEvent } from "@/lib/activityStream";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 interface OpenRouterKeyRow {
   id: string;
@@ -97,23 +99,39 @@ export default function OpenRouterKeysPage() {
 
   useEffect(() => { void loadKeys(); }, []);
 
-  // SSE — atividade em tempo real
+  // Supabase Realtime — atividade em tempo real
   useEffect(() => {
-    const es = new EventSource("/api/internal/activity-stream");
-    es.onopen = () => setSseConnected(true);
-    es.onerror = () => setSseConnected(false);
-    es.onmessage = (e) => {
-      const event = JSON.parse(e.data as string) as ActivityEvent;
-      setActivityLog((prev) => [event, ...prev].slice(0, 30));
-      if (event.type === "using") {
-        setActiveKeyId(event.keyId);
-      } else if (event.type === "success" || event.type === "rate_limit_hit") {
-        setActiveKeyId(null);
-        // Recarrega para atualizar request_count e rate_limited_until
-        void loadKeys();
-      }
-    };
-    return () => { es.close(); setSseConnected(false); };
+    const sb = createSupabaseBrowserClient();
+
+    // Carrega os últimos eventos ao montar
+    void sb
+      .from("activity_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (data) setActivityLog((data as ActivityEventRow[]).map(rowToEvent));
+      });
+
+    const channel = sb
+      .channel("activity_events_realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activity_events" },
+        (payload) => {
+          const event = rowToEvent(payload.new as ActivityEventRow);
+          setActivityLog((prev) => [event, ...prev].slice(0, 30));
+          if (event.type === "using") {
+            setActiveKeyId(event.keyId);
+          } else if (event.type === "success" || event.type === "rate_limit_hit") {
+            setActiveKeyId(null);
+            void loadKeys();
+          }
+        },
+      )
+      .subscribe((status) => setSseConnected(status === "SUBSCRIBED"));
+
+    return () => { void sb.removeChannel(channel); setSseConnected(false); };
   }, []);
 
   function getStatus(row: OpenRouterKeyRow) {
@@ -409,11 +427,18 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
       break;
   }
 
+  const client = "clientName" in event ? event.clientName : null;
+
   return (
     <div className="flex items-center gap-3 px-4 py-2 text-xs">
       <span className="shrink-0 text-zinc-600 tabular-nums">{time}</span>
       <span className={`shrink-0 w-4 text-center font-mono ${color}`}>{icon}</span>
       <span className={color}>{text}</span>
+      {client && (
+        <span className="ml-auto shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500 font-mono">
+          {client}
+        </span>
+      )}
     </div>
   );
 }

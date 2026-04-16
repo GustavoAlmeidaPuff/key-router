@@ -17,13 +17,11 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = (await request.json()) as { name?: string };
-  if (!body.name) {
-    return NextResponse.json({ error: "name é obrigatório" }, { status: 400 });
-  }
+  const normalizedName = body.name?.trim() || `Proxy Key ${new Date().toLocaleString("pt-BR")}`;
 
   const rawKey = generateProxyKey();
   const created = await prisma.proxyKey.create({
-    data: { name: body.name, key: rawKey },
+    data: { name: normalizedName, key: rawKey },
   });
 
   return NextResponse.json({

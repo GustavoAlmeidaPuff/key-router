@@ -14,6 +14,7 @@ export default function ProxyKeysPage() {
   const [keys, setKeys] = useState<ProxyKeyRow[]>([]);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/internal/proxy-keys")
@@ -33,11 +34,17 @@ export default function ProxyKeysPage() {
   }
 
   async function create() {
+    setErrorMessage(null);
     const response = await fetch("/api/internal/proxy-keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      setErrorMessage(payload.error ?? "Não foi possível criar a proxy key.");
+      return;
+    }
     const payload = await response.json();
     setNewKey(payload.key ?? null);
     setName("");
@@ -68,6 +75,12 @@ export default function ProxyKeysPage() {
       {newKey ? (
         <div className="rounded border border-emerald-700 bg-emerald-900/20 p-3 text-sm">
           Nova key (mostrada uma vez): {newKey}
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="rounded border border-red-700 bg-red-900/20 p-3 text-sm">
+          {errorMessage}
         </div>
       ) : null}
 

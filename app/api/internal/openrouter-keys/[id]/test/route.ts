@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
+import { isRateLimitError, extractRetryAfter } from "@/lib/rateLimitDetector";
+import { markAsRateLimited } from "@/lib/keyRouter";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -38,9 +40,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
   });
 
   const latencyMs = Date.now() - startedAt;
+
   if (!response.ok) {
+    const errorText = await response.text();
+
+    // Se for rate limit, marca no banco e retorna status atualizado
+    if (isRateLimitError(response, errorText)) {
+      const retryAfter = extractRetryAfter(response);
+      await markAsRateLimited(id, retryAfter ?? undefined);
+
+      const until = new Date(Date.now() + (retryAfter ?? 60) * 1000).toISOString();
+      return NextResponse.json({
+        success: false,
+        rateLimited: true,
+        error: "Rate limit atingido",
+        rate_limited_until: until,
+        latencyMs,
+        model,
+      }, { status: 400 });
+    }
+
     return NextResponse.json(
-      { success: false, error: await response.text(), latencyMs, model },
+      { success: false, error: errorText, latencyMs, model },
       { status: 400 },
     );
   }

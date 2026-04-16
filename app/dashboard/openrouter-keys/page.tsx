@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
 
@@ -87,6 +87,8 @@ export default function OpenRouterKeysPage() {
     const r = await fetch(`/api/internal/openrouter-keys/${id}/test`, { method: "POST" });
     const result = (await r.json()) as TestResult;
     setTestResults((prev) => ({ ...prev, [id]: result }));
+    // Recarrega para refletir mudança de status (ex: rate limit detectado)
+    await loadKeys();
   }
 
   function getStatus(row: OpenRouterKeyRow) {
@@ -186,11 +188,18 @@ export default function OpenRouterKeysPage() {
                       {row.request_count.toLocaleString("pt-BR")}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
                         <button
                           onClick={() => void testKey(row.id)}
                           disabled={testResult === "loading"}
-                          className="rounded px-2 py-1 text-xs text-zinc-400 border border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50 transition-colors"
+                          className={`rounded px-2 py-1 text-xs border transition-colors disabled:opacity-50 ${
+                            testResult && testResult !== "loading"
+                              ? testResult.success
+                                ? "border-emerald-800 text-emerald-400"
+                                : "border-red-900 text-red-400"
+                              : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                          }`}
                         >
                           {testResult === "loading"
                             ? "..."
@@ -200,6 +209,13 @@ export default function OpenRouterKeysPage() {
                                 : "✗ falhou"
                               : "Testar"}
                         </button>
+                        </div>
+                        {testResult && testResult !== "loading" && !testResult.success && testResult.error && (
+                          <p className="text-[11px] text-red-400 max-w-xs truncate" title={testResult.error}>
+                            {testResult.error}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2">
                         <button
                           onClick={() => void toggleActive(row)}
                           className={`rounded px-2 py-1 text-xs border transition-colors ${
@@ -216,6 +232,7 @@ export default function OpenRouterKeysPage() {
                         >
                           Remover
                         </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -280,7 +297,32 @@ export default function OpenRouterKeysPage() {
   );
 }
 
+function useCountdown(until: string | null): string {
+  const [remaining, setRemaining] = useState("");
+
+  useEffect(() => {
+    if (!until) return;
+
+    function update() {
+      const diff = new Date(until!).getTime() - Date.now();
+      if (diff <= 0) { setRemaining("0s"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`);
+    }
+
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [until]);
+
+  return remaining;
+}
+
 function StatusBadge({ status, rateLimitedUntil }: { status: string; rateLimitedUntil: string | null }) {
+  const countdown = useCountdown(status === "limited" ? rateLimitedUntil : null);
+
   if (status === "available") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
@@ -290,11 +332,10 @@ function StatusBadge({ status, rateLimitedUntil }: { status: string; rateLimited
     );
   }
   if (status === "limited") {
-    const until = rateLimitedUntil ? new Date(rateLimitedUntil).toLocaleTimeString("pt-BR") : "";
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400" title={`Reset às ${until}`}>
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-        Rate limit · {until}
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+        Rate limit · {countdown}
       </span>
     );
   }

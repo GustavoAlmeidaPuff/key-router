@@ -51,7 +51,7 @@ export default function ProxyKeysPage() {
       setNewKey(payload.key ?? null);
       setName("");
       setCreateOpen(false);
-      toast("Proxy key criada!", "success");
+      toast("Open Key criada!", "success");
       await load();
     } else {
       const err = (await r.json().catch(() => ({}))) as { error?: string };
@@ -75,9 +75,9 @@ export default function ProxyKeysPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Proxy Keys</h1>
+          <h1 className="text-xl font-semibold text-zinc-100">Open Keys</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Keys que você distribui para seus produtos
+            Open Keys que você distribui para seus produtos
           </p>
         </div>
         <button
@@ -138,7 +138,7 @@ export default function ProxyKeysPage() {
             ) : keys.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-600">
-                  Nenhuma proxy key ainda.{" "}
+                  Nenhuma open key ainda.{" "}
                   <button onClick={() => setCreateOpen(true)} className="text-indigo-400 hover:underline">
                     Criar primeira
                   </button>

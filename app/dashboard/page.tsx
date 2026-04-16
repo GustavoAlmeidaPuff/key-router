@@ -171,7 +171,7 @@ export default function DashboardPage() {
         <div className="flex gap-3 border-b border-zinc-800/60 bg-zinc-950/40 px-5 py-3">
           <input
             className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/20"
-            placeholder="sk-proxy-xxx (Proxy Key)"
+            placeholder="sk-proxy-xxx (Open Key)"
             value={proxyKey}
             onChange={(e) => setProxyKey(e.target.value)}
           />

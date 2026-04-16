@@ -29,7 +29,7 @@ const navItems = [
   },
   {
     href: "/dashboard/proxy-keys",
-    label: "Proxy Keys",
+    label: "Open Keys",
     icon: (
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M9 2L16 5.5V9C16 12.5 13 15.5 9 17C5 15.5 2 12.5 2 9V5.5L9 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />

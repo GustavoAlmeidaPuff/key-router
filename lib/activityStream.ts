@@ -1,54 +1,29 @@
+// Server-only — não importar em client components
 import { supabase } from "@/lib/supabase";
+import type { ActivityEvent } from "@/lib/activityTypes";
 
-export type ActivityEvent =
-  | { type: "using"; keyId: string; keyName: string; clientName: string; ts: number }
-  | { type: "success"; keyId: string; keyName: string; clientName: string; latencyMs: number; ts: number }
-  | { type: "rate_limit_hit"; keyId: string; keyName: string; clientName: string; ts: number }
-  | { type: "retrying"; attempt: number; clientName: string; ts: number }
-  | { type: "no_keys"; clientName: string; ts: number }
-  | { type: "all_limited"; clientName: string; ts: number };
+export type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
+export { rowToEvent } from "@/lib/activityTypes";
 
-export type ActivityEventRow = {
-  id: number;
+type AnyEvent = {
   type: string;
-  key_id: string | null;
-  key_name: string | null;
-  client_name: string | null;
-  latency_ms: number | null;
-  attempt: number | null;
-  created_at: string;
+  keyId?: string;
+  keyName?: string;
+  clientName?: string;
+  latencyMs?: number;
+  attempt?: number;
 };
 
-export function rowToEvent(row: ActivityEventRow): ActivityEvent {
-  const ts = new Date(row.created_at).getTime();
-  switch (row.type) {
-    case "using":
-      return { type: "using", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, ts };
-    case "success":
-      return { type: "success", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, latencyMs: row.latency_ms!, ts };
-    case "rate_limit_hit":
-      return { type: "rate_limit_hit", keyId: row.key_id!, keyName: row.key_name!, clientName: row.client_name!, ts };
-    case "retrying":
-      return { type: "retrying", attempt: row.attempt!, clientName: row.client_name!, ts };
-    case "no_keys":
-      return { type: "no_keys", clientName: row.client_name!, ts };
-    default:
-      return { type: "all_limited", clientName: row.client_name!, ts };
-  }
-}
-
-// Fire-and-forget: não bloqueia o proxy route
-export function emitActivity(event: Omit<ActivityEvent, "ts">): void {
+export function emitActivity(event: AnyEvent): void {
   void supabase.from("activity_events").insert({
     type: event.type,
-    key_id: "keyId" in event ? event.keyId : null,
-    key_name: "keyName" in event ? event.keyName : null,
-    client_name: "clientName" in event ? event.clientName : null,
-    latency_ms: "latencyMs" in event ? (event as { latencyMs: number }).latencyMs : null,
-    attempt: "attempt" in event ? (event as { attempt: number }).attempt : null,
+    key_id: event.keyId ?? null,
+    key_name: event.keyName ?? null,
+    client_name: event.clientName ?? null,
+    latency_ms: event.latencyMs ?? null,
+    attempt: event.attempt ?? null,
   });
 
-  // Limpa eventos com mais de 1h para não acumular
   void supabase
     .from("activity_events")
     .delete()

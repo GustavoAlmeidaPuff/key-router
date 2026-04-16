@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
-import type { ActivityEvent, ActivityEventRow } from "@/lib/activityStream";
-import { rowToEvent } from "@/lib/activityStream";
+import type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
+import { rowToEvent } from "@/lib/activityTypes";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 interface OpenRouterKeyRow {

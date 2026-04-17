@@ -1,4 +1,5 @@
 // Server-only — não importar em client components
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import type { ActivityEvent } from "@/lib/activityTypes";
 
@@ -14,18 +15,22 @@ type AnyEvent = {
   attempt?: number;
 };
 
+// Em serverless (Vercel), fire-and-forget é descartado quando a função termina.
+// `after()` estende o lifetime da invocação até o insert completar.
 export function emitActivity(event: AnyEvent): void {
-  void supabase.from("activity_events").insert({
-    type: event.type,
-    key_id: event.keyId ?? null,
-    key_name: event.keyName ?? null,
-    client_name: event.clientName ?? null,
-    latency_ms: event.latencyMs ?? null,
-    attempt: event.attempt ?? null,
-  });
+  after(async () => {
+    await supabase.from("activity_events").insert({
+      type: event.type,
+      key_id: event.keyId ?? null,
+      key_name: event.keyName ?? null,
+      client_name: event.clientName ?? null,
+      latency_ms: event.latencyMs ?? null,
+      attempt: event.attempt ?? null,
+    });
 
-  void supabase
-    .from("activity_events")
-    .delete()
-    .lt("created_at", new Date(Date.now() - 3_600_000).toISOString());
+    await supabase
+      .from("activity_events")
+      .delete()
+      .lt("created_at", new Date(Date.now() - 3_600_000).toISOString());
+  });
 }

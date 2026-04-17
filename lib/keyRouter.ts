@@ -1,7 +1,5 @@
 import { supabase, type OpenRouterKey } from "@/lib/supabase";
 
-let roundRobinIndex = 0;
-
 export async function releaseExpiredRateLimits(): Promise<void> {
   await supabase
     .from("openrouter_keys")
@@ -17,13 +15,12 @@ export async function getAvailableKey(): Promise<OpenRouterKey | null> {
     .select("*")
     .eq("is_active", true)
     .or(`rate_limited_until.is.null,rate_limited_until.lt.${new Date().toISOString()}`)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(1);
 
   if (!keys || keys.length === 0) return null;
 
-  const selected = keys[roundRobinIndex % keys.length] as OpenRouterKey;
-  roundRobinIndex = (roundRobinIndex + 1) % keys.length;
-  return selected;
+  return keys[0] as OpenRouterKey;
 }
 
 export async function markAsRateLimited(

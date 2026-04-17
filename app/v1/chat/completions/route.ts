@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
   }
 
   const isStreaming = Boolean((body as { stream?: boolean }).stream);
-  let lastResponse: Response | null = null;
+  let lastStatus = 429;
+  let lastError: string | null = null;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (attempt > 0) emitActivity({ type: "retrying", attempt, clientName });
@@ -84,11 +85,12 @@ export async function POST(request: NextRequest) {
     const rl = detectRateLimit(response, text);
     if (rl.isRateLimited) {
       emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName });
-      // Só marca a key se o limite for de conta; limite do modelo não é culpa da key.
-      if (rl.scope !== "model") {
+      // Conservador: só marca a key quando o escopo é claramente de conta.
+      if (rl.scope === "key") {
         await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
       }
-      lastResponse = response;
+      lastStatus = response.status;
+      lastError = text;
       continue;
     }
 
@@ -99,8 +101,19 @@ export async function POST(request: NextRequest) {
   }
 
   emitActivity({ type: "all_limited", clientName });
+
+  // Repassa o erro real do OpenRouter pra facilitar debug no cliente.
+  let upstream: unknown = lastError;
+  if (lastError) {
+    try { upstream = JSON.parse(lastError); } catch { /* mantém texto */ }
+  }
+
   return NextResponse.json(
-    { error: "Todas as keys estão em rate limit", status: lastResponse?.status ?? 429 },
+    {
+      error: "Todas as keys retornaram rate limit após 3 tentativas",
+      status: lastStatus,
+      upstream,
+    },
     { status: 429 },
   );
 }

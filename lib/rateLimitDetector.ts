@@ -14,7 +14,13 @@ export function detectRateLimit(response: Response, bodyText?: string): RateLimi
   }
 
   const message = extractBodyMessage(bodyText);
-  const scope = classifyScope(message);
+  let scope = classifyScope(message);
+
+  // Header forte: se o OpenRouter disse que a key ficou sem requests, é escopo de conta.
+  if (scope === "unknown" && response.headers.get("X-RateLimit-Remaining") === "0") {
+    scope = "key";
+  }
+
   return { isRateLimited: true, scope };
 }
 

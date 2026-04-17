@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
 import type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
 import { rowToEvent } from "@/lib/activityTypes";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { FreeModelsAside } from "./_components/FreeModelsAside";
 
 interface OpenRouterKeyRow {
   id: string;
@@ -147,7 +148,8 @@ export default function OpenRouterKeysPage() {
   const available = keys.filter((k) => getStatus(k) === "available").length;
 
   return (
-    <section className="space-y-6">
+    <div className="flex gap-6 items-start">
+    <section className="flex-1 min-w-0 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -315,7 +317,7 @@ export default function OpenRouterKeysPage() {
         </p>
       )}
 
-      {/* ── Modal: Registrar key ───────────────────────────────── */}
+      {/* Modal: Registrar key */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Registrar OpenRouter Key">
         <div className="space-y-4">
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-xs text-zinc-500 leading-relaxed">
@@ -359,6 +361,8 @@ export default function OpenRouterKeysPage() {
         </div>
       </Modal>
     </section>
+    <FreeModelsAside />
+    </div>
   );
 }
 

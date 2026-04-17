@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
-import { isRateLimitError, extractRetryAfter } from "@/lib/rateLimitDetector";
+import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { markAsRateLimited } from "@/lib/keyRouter";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
+}
+
+interface AuthKeyPayload {
+  data?: {
+    label?: string;
+    usage?: number;
+    limit?: number | null;
+    is_free_tier?: boolean;
+    rate_limit?: { requests?: number; interval?: string };
+  };
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -23,70 +33,71 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!keyRow) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
 
   const startedAt = Date.now();
-  const model = await getFirstFreeModel(keyRow.key);
-
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
+  const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
     headers: {
       Authorization: `Bearer ${keyRow.key}`,
-      "Content-Type": "application/json",
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
       "X-Title": "Key Router",
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: "Say 'OK' and nothing else." }],
-    }),
   });
 
   const latencyMs = Date.now() - startedAt;
+  const bodyText = await response.text();
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const rl = detectRateLimit(response, bodyText);
 
-    // Se for rate limit, marca no banco e retorna status atualizado
-    if (isRateLimitError(response, errorText)) {
-      const retryAfter = extractRetryAfter(response, errorText);
+    // Só marca a key como bloqueada se o rate limit for de conta, não de modelo.
+    if (rl.isRateLimited && rl.scope !== "model") {
+      const retryAfter = extractRetryAfter(response, bodyText);
       await markAsRateLimited(id, retryAfter ?? undefined);
 
       const until = new Date(Date.now() + (retryAfter ?? 60) * 1000).toISOString();
       return NextResponse.json({
         success: false,
         rateLimited: true,
-        error: "Rate limit atingido",
+        scope: rl.scope,
+        error: "Rate limit atingido na key",
         rate_limited_until: until,
         latencyMs,
-        model,
       }, { status: 400 });
     }
 
+    // 401/403 = key inválida ou revogada
+    if (response.status === 401 || response.status === 403) {
+      return NextResponse.json(
+        { success: false, error: "Key inválida ou revogada", latencyMs },
+        { status: 400 },
+      );
+    }
+
     return NextResponse.json(
-      { success: false, error: errorText, latencyMs, model },
+      { success: false, error: bodyText || `HTTP ${response.status}`, latencyMs },
       { status: 400 },
     );
   }
 
-  // Limpa qualquer rate limit anterior
+  // Sucesso: key é válida. Limpa qualquer rate limit anterior.
   await supabase
     .from("openrouter_keys")
     .update({ rate_limited_until: null })
     .eq("id", id);
 
-  return NextResponse.json({ success: true, latencyMs, model });
-}
+  let usage: AuthKeyPayload["data"] | undefined;
+  try {
+    usage = (JSON.parse(bodyText) as AuthKeyPayload).data;
+  } catch {
+    // ignora
+  }
 
-async function getFirstFreeModel(openRouterKey: string): Promise<string> {
-  const response = await fetch("https://openrouter.ai/api/v1/models", {
-    headers: {
-      Authorization: `Bearer ${openRouterKey}`,
-      "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
-      "X-Title": "Key Router",
-    },
+  return NextResponse.json({
+    success: true,
+    latencyMs,
+    usage: usage ? {
+      used: usage.usage,
+      limit: usage.limit,
+      isFreeTier: usage.is_free_tier,
+      rateLimit: usage.rate_limit,
+    } : undefined,
   });
-
-  if (!response.ok) return "google/gemma-2-9b-it:free";
-
-  const payload = (await response.json()) as { data?: Array<{ id?: string }> };
-  const firstFree = payload.data?.find((m) => m.id?.includes(":free"))?.id;
-  return firstFree ?? "google/gemma-2-9b-it:free";
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAvailableKey, markAsRateLimited } from "@/lib/keyRouter";
-import { extractRetryAfter, isRateLimitError } from "@/lib/rateLimitDetector";
+import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
 import { emitActivity } from "@/lib/activityStream";
 
@@ -81,9 +81,13 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await response.text();
-    if (isRateLimitError(response, text)) {
+    const rl = detectRateLimit(response, text);
+    if (rl.isRateLimited) {
       emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName });
-      await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
+      // Só marca a key se o limite for de conta; limite do modelo não é culpa da key.
+      if (rl.scope !== "model") {
+        await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
+      }
       lastResponse = response;
       continue;
     }

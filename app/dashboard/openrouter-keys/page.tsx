@@ -138,17 +138,13 @@ export default function OpenRouterKeysPage() {
             created_at,
           };
         });
-        setActivityLog(rows.map(rowToEvent));
+        const events = rows.map(rowToEvent);
+        setActivityLog(events);
         setSseConnected(true);
 
-        for (const event of rows.map(rowToEvent)) {
-          if (event.type === "using") {
-            setActiveKeyId(event.keyId);
-            break;
-          }
-        }
-        const last = rows[0] ? rowToEvent(rows[0]) : null;
-        if (last?.type === "success" || last?.type === "rate_limit_hit") {
+        const head = events[0];
+        if (head?.type === "using") setActiveKeyId(head.keyId);
+        else if (head?.type === "success" || head?.type === "rate_limit_hit") {
           setActiveKeyId(null);
           void loadKeys();
         }

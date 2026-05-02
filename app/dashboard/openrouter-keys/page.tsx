@@ -5,7 +5,15 @@ import { Modal } from "@/app/_components/Modal";
 import { useToast } from "@/app/_components/ToastProvider";
 import type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
 import { rowToEvent } from "@/lib/activityTypes";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import {
+  collection,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  type Timestamp,
+} from "firebase/firestore";
+import { getFirebaseFirestore } from "@/lib/firebase-client";
 import { FreeModelsAside } from "./_components/FreeModelsAside";
 
 interface OpenRouterKeyRow {
@@ -100,39 +108,58 @@ export default function OpenRouterKeysPage() {
 
   useEffect(() => { void loadKeys(); }, []);
 
-  // Supabase Realtime — atividade em tempo real
+  // Firestore — atividade em tempo real (leitura; escrita só no servidor)
   useEffect(() => {
-    const sb = createSupabaseBrowserClient();
+    const db = getFirebaseFirestore();
+    const q = query(
+      collection(db, "activity_events"),
+      orderBy("created_at", "desc"),
+      limit(30),
+    );
 
-    // Carrega os últimos eventos ao montar
-    void sb
-      .from("activity_events")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        if (data) setActivityLog((data as ActivityEventRow[]).map(rowToEvent));
-      });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows: ActivityEventRow[] = snap.docs.map((doc) => {
+          const d = doc.data();
+          const raw = d.created_at;
+          const created_at =
+            typeof raw === "string"
+              ? raw
+              : (raw as Timestamp).toDate().toISOString();
+          return {
+            id: doc.id,
+            type: d.type as string,
+            key_id: (d.key_id as string | null) ?? null,
+            key_name: (d.key_name as string | null) ?? null,
+            client_name: (d.client_name as string | null) ?? null,
+            latency_ms: (d.latency_ms as number | null) ?? null,
+            attempt: (d.attempt as number | null) ?? null,
+            created_at,
+          };
+        });
+        setActivityLog(rows.map(rowToEvent));
+        setSseConnected(true);
 
-    const channel = sb
-      .channel("activity_events_realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "activity_events" },
-        (payload) => {
-          const event = rowToEvent(payload.new as ActivityEventRow);
-          setActivityLog((prev) => [event, ...prev].slice(0, 30));
+        for (const event of rows.map(rowToEvent)) {
           if (event.type === "using") {
             setActiveKeyId(event.keyId);
-          } else if (event.type === "success" || event.type === "rate_limit_hit") {
-            setActiveKeyId(null);
-            void loadKeys();
+            break;
           }
-        },
-      )
-      .subscribe((status) => setSseConnected(status === "SUBSCRIBED"));
+        }
+        const last = rows[0] ? rowToEvent(rows[0]) : null;
+        if (last?.type === "success" || last?.type === "rate_limit_hit") {
+          setActiveKeyId(null);
+          void loadKeys();
+        }
+      },
+      () => setSseConnected(false),
+    );
 
-    return () => { void sb.removeChannel(channel); setSseConnected(false); };
+    return () => {
+      unsub();
+      setSseConnected(false);
+    };
   }, []);
 
   function getStatus(row: OpenRouterKeyRow) {

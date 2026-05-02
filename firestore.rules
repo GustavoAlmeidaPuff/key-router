@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Eventos de atividade: leitura no dashboard (usuário Firebase Auth); escrita só pelo servidor (Admin SDK).
+    match /activity_events/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

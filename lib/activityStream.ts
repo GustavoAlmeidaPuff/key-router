@@ -1,7 +1,6 @@
 // Server-only — não importar em client components
 import { after } from "next/server";
 import { insertActivityEvent } from "@/lib/firestore-data";
-import type { ActivityEvent } from "@/lib/activityTypes";
 
 export type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
 export { rowToEvent } from "@/lib/activityTypes";

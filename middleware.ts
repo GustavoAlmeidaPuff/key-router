@@ -1,42 +1,37 @@
-import { createServerClient } from "@supabase/ssr";
-import { NextRequest, NextResponse } from "next/server";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { type NextRequest, NextResponse } from "next/server";
+import { firebaseConfig } from "@/lib/firebase-config";
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? "https://ffzwevrphnbyrdymduwn.supabase.co";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const PROJECT_ID = firebaseConfig.projectId;
+const JWKS = createRemoteJWKSet(
+  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
+);
+
+async function isValidSessionCookie(token: string): Promise<boolean> {
+  try {
+    await jwtVerify(token, JWKS, {
+      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
+      audience: PROJECT_ID,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const session = request.cookies.get("__session")?.value;
+  const loggedIn = session ? await isValidSessionCookie(session) : false;
 
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value),
-        );
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
-      },
-    },
-  });
-
-  const { data: { session } } = await supabase.auth.getSession();
-
-  // Protege /dashboard — redireciona para login se não autenticado
-  if (request.nextUrl.pathname.startsWith("/dashboard") && !session) {
+  if (request.nextUrl.pathname.startsWith("/dashboard") && !loggedIn) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Se já logado e tentar acessar /login, redireciona pro dashboard
-  if (request.nextUrl.pathname === "/login" && session) {
+  if (request.nextUrl.pathname === "/login" && loggedIn) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return response;
+  return NextResponse.next({ request });
 }
 
 export const config = {

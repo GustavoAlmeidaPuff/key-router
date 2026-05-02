@@ -1,6 +1,6 @@
 // Server-only — não importar em client components
 import { after } from "next/server";
-import { insertActivityEvent } from "@/lib/firestore-data";
+import { db } from "@/lib/supabase";
 
 export type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
 export { rowToEvent } from "@/lib/activityTypes";
@@ -18,7 +18,7 @@ type AnyEvent = {
 // `after()` estende o lifetime da invocação até o insert completar.
 export function emitActivity(event: AnyEvent): void {
   after(async () => {
-    await insertActivityEvent({
+    await db().from("activity_events").insert({
       type: event.type,
       key_id: event.keyId ?? null,
       key_name: event.keyName ?? null,
@@ -26,5 +26,10 @@ export function emitActivity(event: AnyEvent): void {
       latency_ms: event.latencyMs ?? null,
       attempt: event.attempt ?? null,
     });
+
+    await db()
+      .from("activity_events")
+      .delete()
+      .lt("created_at", new Date(Date.now() - 3_600_000).toISOString());
   });
 }

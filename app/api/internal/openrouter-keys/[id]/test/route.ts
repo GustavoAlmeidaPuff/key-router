@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
-import { clearOpenRouterKeyRateLimit, getOpenRouterKeySecret } from "@/lib/firestore-data";
 import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { markAsRateLimited } from "@/lib/keyRouter";
 
@@ -24,13 +24,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
 
-  const keyRow = await getOpenRouterKeySecret(id);
+  const { data: keyRow } = await db()
+    .from("openrouter_keys")
+    .select("key")
+    .eq("id", id)
+    .single();
+
   if (!keyRow) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
 
   const startedAt = Date.now();
   const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
     headers: {
-      Authorization: `Bearer ${keyRow.key}`,
+      Authorization: `Bearer ${keyRow.key as string}`,
       "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER ?? "http://localhost:3000",
       "X-Title": "Key Router",
     },
@@ -42,7 +47,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!response.ok) {
     const rl = detectRateLimit(response, bodyText);
 
-    // Só marca a key como bloqueada se o rate limit for de conta, não de modelo.
     if (rl.isRateLimited && rl.scope !== "model") {
       const retryAfter = extractRetryAfter(response, bodyText);
       await markAsRateLimited(id, retryAfter ?? undefined);
@@ -61,7 +65,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // 401/403 = key inválida ou revogada
     if (response.status === 401 || response.status === 403) {
       return NextResponse.json(
         { success: false, error: "Key inválida ou revogada", latencyMs },
@@ -75,8 +78,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  // Sucesso: key é válida. Limpa qualquer rate limit anterior.
-  await clearOpenRouterKeyRateLimit(id);
+  await db().from("openrouter_keys").update({ rate_limited_until: null }).eq("id", id);
 
   let usage: AuthKeyPayload["data"] | undefined;
   try {

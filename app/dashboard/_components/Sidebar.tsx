@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { getFirebaseAuth } from "@/lib/firebase-client";
+import { createSupabaseBrowserAuthClient } from "@/lib/supabase-browser";
+import type { User } from "@supabase/supabase-js";
 
 const navItems = [
   {
@@ -48,19 +48,15 @@ export function Sidebar() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    return onAuthStateChanged(auth, setUser);
+    const supabase = createSupabaseBrowserAuthClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
-  async function handleSignOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    await signOut(getFirebaseAuth());
+  async function signOut() {
+    const supabase = createSupabaseBrowserAuthClient();
+    await supabase.auth.signOut();
     router.push("/login");
   }
-
-  const displayName =
-    user?.displayName ?? user?.email ?? null;
-  const photoUrl = user?.photoURL ?? null;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-zinc-800/60 bg-zinc-950">
@@ -106,9 +102,9 @@ export function Sidebar() {
         {user ? (
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
             {/* Avatar */}
-            {photoUrl ? (
+            {user.user_metadata?.avatar_url ? (
               <img
-                src={photoUrl}
+                src={user.user_metadata.avatar_url as string}
                 alt="avatar"
                 className="h-7 w-7 rounded-full"
               />
@@ -119,11 +115,11 @@ export function Sidebar() {
             )}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-zinc-300 truncate">
-                {displayName}
+                {user.user_metadata?.name ?? user.email}
               </p>
             </div>
             <button
-              onClick={() => void handleSignOut()}
+              onClick={() => void signOut()}
               title="Sair"
               className="text-zinc-600 hover:text-zinc-400 transition-colors"
             >

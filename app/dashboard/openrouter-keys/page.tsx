@@ -6,14 +6,10 @@ import { useToast } from "@/app/_components/ToastProvider";
 import type { ActivityEvent, ActivityEventRow } from "@/lib/activityTypes";
 import { rowToEvent } from "@/lib/activityTypes";
 import {
-  collection,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  type Timestamp,
-} from "firebase/firestore";
-import { getFirebaseFirestore } from "@/lib/firebase-client";
+  createSupabaseBrowserAuthClient,
+  createSupabaseBrowserClient,
+} from "@/lib/supabase-browser";
+import { SUPABASE_SCHEMA } from "@/lib/supabase-schema";
 import { FreeModelsAside } from "./_components/FreeModelsAside";
 
 interface OpenRouterKeyRow {
@@ -108,52 +104,44 @@ export default function OpenRouterKeysPage() {
 
   useEffect(() => { void loadKeys(); }, []);
 
-  // Firestore — atividade em tempo real (leitura; escrita só no servidor)
+  // Supabase Realtime — dados no schema configurável; Realtime usa cliente raiz (tem `.channel`).
   useEffect(() => {
-    const db = getFirebaseFirestore();
-    const q = query(
-      collection(db, "activity_events"),
-      orderBy("created_at", "desc"),
-      limit(30),
-    );
+    const sbData = createSupabaseBrowserClient();
+    const sbRealtime = createSupabaseBrowserAuthClient();
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const rows: ActivityEventRow[] = snap.docs.map((doc) => {
-          const d = doc.data();
-          const raw = d.created_at;
-          const created_at =
-            typeof raw === "string"
-              ? raw
-              : (raw as Timestamp).toDate().toISOString();
-          return {
-            id: doc.id,
-            type: d.type as string,
-            key_id: (d.key_id as string | null) ?? null,
-            key_name: (d.key_name as string | null) ?? null,
-            client_name: (d.client_name as string | null) ?? null,
-            latency_ms: (d.latency_ms as number | null) ?? null,
-            attempt: (d.attempt as number | null) ?? null,
-            created_at,
-          };
-        });
-        const events = rows.map(rowToEvent);
-        setActivityLog(events);
-        setSseConnected(true);
+    void sbData
+      .from("activity_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (data) setActivityLog((data as ActivityEventRow[]).map(rowToEvent));
+      });
 
-        const head = events[0];
-        if (head?.type === "using") setActiveKeyId(head.keyId);
-        else if (head?.type === "success" || head?.type === "rate_limit_hit") {
-          setActiveKeyId(null);
-          void loadKeys();
-        }
-      },
-      () => setSseConnected(false),
-    );
+    const channel = sbRealtime
+      .channel("activity_events_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: SUPABASE_SCHEMA,
+          table: "activity_events",
+        },
+        (payload) => {
+          const event = rowToEvent(payload.new as ActivityEventRow);
+          setActivityLog((prev) => [event, ...prev].slice(0, 30));
+          if (event.type === "using") {
+            setActiveKeyId(event.keyId);
+          } else if (event.type === "success" || event.type === "rate_limit_hit") {
+            setActiveKeyId(null);
+            void loadKeys();
+          }
+        },
+      )
+      .subscribe((status) => setSseConnected(status === "SUBSCRIBED"));
 
     return () => {
-      unsub();
+      void sbRealtime.removeChannel(channel);
       setSseConnected(false);
     };
   }, []);

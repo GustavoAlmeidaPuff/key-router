@@ -9,7 +9,7 @@ export type ActivityEvent =
   | { type: "all_limited"; clientName: string; ts: number };
 
 export type ActivityEventRow = {
-  id: string;
+  id: number;
   type: string;
   key_id: string | null;
   key_name: string | null;

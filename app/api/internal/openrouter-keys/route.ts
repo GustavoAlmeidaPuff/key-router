@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
-import { insertOpenRouterKey, listOpenRouterKeys } from "@/lib/firestore-data";
 import { maskKey } from "@/lib/masks";
 
 export async function GET(request: NextRequest) {
   const unauthorized = checkDashboardAccess(request);
   if (unauthorized) return unauthorized;
 
-  try {
-    const keys = await listOpenRouterKeys();
-    return NextResponse.json(
-      keys.map((key) => ({
-        ...key,
-        key: maskKey(key.key),
-        suffix: key.key.slice(-4),
-      })),
-    );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao listar keys";
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  const { data: keys, error } = await db()
+    .from("openrouter_keys")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(
+    (keys ?? []).map((key) => ({
+      ...key,
+      key: maskKey(key.key as string),
+      suffix: (key.key as string).slice(-4),
+    })),
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -31,18 +32,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name e key são obrigatórios" }, { status: 400 });
   }
 
-  try {
-    const created = await insertOpenRouterKey(body.name, body.key);
-    return NextResponse.json({
-      ...created,
-      key: maskKey(created.key),
-      suffix: created.key.slice(-4),
-    });
-  } catch (e) {
-    const err = e as Error & { code?: string };
-    if (err.code === "23505") {
+  const { data: created, error } = await db()
+    .from("openrouter_keys")
+    .insert({ name: body.name, key: body.key })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
       return NextResponse.json({ error: "Essa key já está cadastrada" }, { status: 409 });
     }
-    return NextResponse.json({ error: err.message ?? "Erro ao criar" }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json({
+    ...created,
+    key: maskKey(created.key as string),
+    suffix: (created.key as string).slice(-4),
+  });
 }

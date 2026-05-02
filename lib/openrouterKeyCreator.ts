@@ -1,4 +1,4 @@
-import { insertOpenRouterKeySimple } from "@/lib/firestore-data";
+import { db } from "@/lib/supabase";
 
 export interface CreateKeyOptions {
   name: string;
@@ -38,7 +38,7 @@ export async function createOpenRouterKey(
 
   if (!key) throw new Error("OpenRouter não retornou a key criada.");
 
-  await insertOpenRouterKeySimple({ name: options.name, key });
+  await db().from("openrouter_keys").insert({ name: options.name, key });
 
   return { key, id };
 }

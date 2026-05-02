@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/supabase";
 import { emitActivity } from "@/lib/activityStream";
-import { touchOpenRouterKeyUsage } from "@/lib/firestore-data";
 import { getAvailableKey, markAsRateLimited } from "@/lib/keyRouter";
 import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
@@ -52,7 +52,13 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    await touchOpenRouterKeyUsage(openRouterKey.id);
+    await db()
+      .from("openrouter_keys")
+      .update({
+        last_used_at: new Date().toISOString(),
+        request_count: openRouterKey.request_count + 1,
+      })
+      .eq("id", openRouterKey.id);
 
     if (response.ok) {
       emitActivity({ type: "success", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName, latencyMs: Date.now() - startedAt });
@@ -79,7 +85,6 @@ export async function POST(request: NextRequest) {
     const rl = detectRateLimit(response, text);
     if (rl.isRateLimited) {
       emitActivity({ type: "rate_limit_hit", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName });
-      // Conservador: só marca a key quando o escopo é claramente de conta.
       if (rl.scope === "key") {
         await markAsRateLimited(openRouterKey.id, extractRetryAfter(response, text) ?? undefined);
       }
@@ -96,7 +101,6 @@ export async function POST(request: NextRequest) {
 
   emitActivity({ type: "all_limited", clientName });
 
-  // Repassa o erro real do OpenRouter pra facilitar debug no cliente.
   let upstream: unknown = lastError;
   if (lastError) {
     try {

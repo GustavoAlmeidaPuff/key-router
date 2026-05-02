@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
+import { clearOpenRouterKeyRateLimit, getOpenRouterKeySecret } from "@/lib/firestore-data";
 import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { markAsRateLimited } from "@/lib/keyRouter";
 
@@ -24,12 +24,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
 
-  const { data: keyRow } = await supabase
-    .from("openrouter_keys")
-    .select("key")
-    .eq("id", id)
-    .single();
-
+  const keyRow = await getOpenRouterKeySecret(id);
   if (!keyRow) return NextResponse.json({ error: "Key não encontrada" }, { status: 404 });
 
   const startedAt = Date.now();
@@ -53,14 +48,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       await markAsRateLimited(id, retryAfter ?? undefined);
 
       const until = new Date(Date.now() + (retryAfter ?? 60) * 1000).toISOString();
-      return NextResponse.json({
-        success: false,
-        rateLimited: true,
-        scope: rl.scope,
-        error: "Rate limit atingido na key",
-        rate_limited_until: until,
-        latencyMs,
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          rateLimited: true,
+          scope: rl.scope,
+          error: "Rate limit atingido na key",
+          rate_limited_until: until,
+          latencyMs,
+        },
+        { status: 400 },
+      );
     }
 
     // 401/403 = key inválida ou revogada
@@ -78,10 +76,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   // Sucesso: key é válida. Limpa qualquer rate limit anterior.
-  await supabase
-    .from("openrouter_keys")
-    .update({ rate_limited_until: null })
-    .eq("id", id);
+  await clearOpenRouterKeyRateLimit(id);
 
   let usage: AuthKeyPayload["data"] | undefined;
   try {
@@ -93,11 +88,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
   return NextResponse.json({
     success: true,
     latencyMs,
-    usage: usage ? {
-      used: usage.usage,
-      limit: usage.limit,
-      isFreeTier: usage.is_free_tier,
-      rateLimit: usage.rate_limit,
-    } : undefined,
+    usage: usage
+      ? {
+          used: usage.usage,
+          limit: usage.limit,
+          isFreeTier: usage.is_free_tier,
+          rateLimit: usage.rate_limit,
+        }
+      : undefined,
   });
 }

@@ -1,24 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { getFirebaseAuth } from "@/lib/firebase-client";
 
 function LoginContent() {
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
 
   async function signInWithGoogle() {
     setLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      const auth = getFirebaseAuth();
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const idToken = await cred.user.getIdToken();
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!res.ok) throw new Error("session");
+      router.push("/dashboard");
+    } catch {
+      router.replace("/login?error=auth");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -62,7 +72,7 @@ function LoginContent() {
               <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
               <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
             </svg>
-            {loading ? "Redirecionando..." : "Entrar com Google"}
+            {loading ? "Entrando..." : "Entrar com Google"}
           </button>
         </div>
       </div>

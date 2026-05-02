@@ -1,5 +1,6 @@
--- OpenRouter Key Router — Supabase Schema
--- Execute este SQL no Supabase Dashboard: https://supabase.com/dashboard
+-- OpenRouter Key Router — tabelas no schema `public`
+-- Se vários apps compartilham o mesmo projeto, use `supabase/schema-in-schema.sql` e
+-- defina NEXT_PUBLIC_SUPABASE_SCHEMA / SUPABASE_SCHEMA (ex.: key_router) e exponha o schema em Settings → API.
 -- Project → SQL Editor → New query
 
 -- ── Proxy Keys ─────────────────────────────────────────────────────────────

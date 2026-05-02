@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { insertProxyKey, listProxyKeys } from "@/lib/firestore-data";
 import { generateProxyKey } from "@/lib/proxyAuth";
 import { checkDashboardAccess } from "@/lib/internalAuth";
 import { maskKey } from "@/lib/masks";
@@ -8,16 +8,15 @@ export async function GET(request: NextRequest) {
   const unauthorized = checkDashboardAccess(request);
   if (unauthorized) return unauthorized;
 
-  const { data: keys, error } = await supabase
-    .from("proxy_keys")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json(
-    (keys ?? []).map((key) => ({ ...key, key: maskKey(key.key, 6) })),
-  );
+  try {
+    const keys = await listProxyKeys();
+    return NextResponse.json(
+      keys.map((key) => ({ ...key, key: maskKey(key.key, 6) })),
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro ao listar";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -29,13 +28,11 @@ export async function POST(request: NextRequest) {
 
   const rawKey = generateProxyKey();
 
-  const { data: created, error } = await supabase
-    .from("proxy_keys")
-    .insert({ name: normalizedName, key: rawKey })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ...created, key: rawKey });
+  try {
+    const created = await insertProxyKey(normalizedName, rawKey);
+    return NextResponse.json({ ...created, key: rawKey });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro ao criar";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

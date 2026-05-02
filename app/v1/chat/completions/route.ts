@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { emitActivity } from "@/lib/activityStream";
+import { touchOpenRouterKeyUsage } from "@/lib/firestore-data";
 import { getAvailableKey, markAsRateLimited } from "@/lib/keyRouter";
 import { detectRateLimit, extractRetryAfter } from "@/lib/rateLimitDetector";
 import { parseBearerToken, validateProxyKey } from "@/lib/proxyAuth";
-import { emitActivity } from "@/lib/activityStream";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -52,13 +52,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    await supabase
-      .from("openrouter_keys")
-      .update({
-        last_used_at: new Date().toISOString(),
-        request_count: openRouterKey.request_count + 1,
-      })
-      .eq("id", openRouterKey.id);
+    await touchOpenRouterKeyUsage(openRouterKey.id);
 
     if (response.ok) {
       emitActivity({ type: "success", keyId: openRouterKey.id, keyName: openRouterKey.name, clientName, latencyMs: Date.now() - startedAt });
@@ -105,7 +99,11 @@ export async function POST(request: NextRequest) {
   // Repassa o erro real do OpenRouter pra facilitar debug no cliente.
   let upstream: unknown = lastError;
   if (lastError) {
-    try { upstream = JSON.parse(lastError); } catch { /* mantém texto */ }
+    try {
+      upstream = JSON.parse(lastError);
+    } catch {
+      /* mantém texto */
+    }
   }
 
   return NextResponse.json(

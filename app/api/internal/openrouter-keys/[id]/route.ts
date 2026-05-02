@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { checkDashboardAccess } from "@/lib/internalAuth";
+import { deleteOpenRouterKey, patchOpenRouterKey } from "@/lib/firestore-data";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -17,15 +17,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.name !== undefined) update.name = body.name;
   if (body.is_active !== undefined) update.is_active = body.is_active;
 
-  const { data, error } = await supabase
-    .from("openrouter_keys")
-    .update(update)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  try {
+    const data = await patchOpenRouterKey(id, update);
+    if (!data) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
+    return NextResponse.json(data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro ao atualizar";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
@@ -33,8 +32,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (unauthorized) return unauthorized;
 
   const { id } = await context.params;
-  const { error } = await supabase.from("openrouter_keys").delete().eq("id", id);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ success: true });
+  try {
+    await deleteOpenRouterKey(id);
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro ao remover";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
